@@ -6,7 +6,7 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 
 const mainApiRoutes = require('./routes/index');
-const globalLimiter = require('./middlewares/limiter').globalLimiter;
+const globalLimiter = require('./middlewares/Limiter').globalLimiter;
 
 const app = express();
 const PORT = process.env.PORT || 3000;

@@ -5,7 +5,7 @@ const adminController = require('../controllers/adminController');
 const verifyTelegram = require('../middlewares/verifyTelegram');
 const { adminCheck } = require('../middlewares/auth');
 const asyncHandler = require('../middlewares/asyncHandler');
-const { adminLimiter } = require('../middlewares/limiter');
+const { adminLimiter } = require('../middlewares/Limiter');
 const {
   validatePromoteUser,
   validateTelegramIdBody

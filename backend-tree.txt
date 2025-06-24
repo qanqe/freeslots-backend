@@ -284,7 +284,7 @@ C:\Users\Ork\Desktop\Temini\FreeSlotsBACK\controllers\userController.js
 C:\Users\Ork\Desktop\Temini\FreeSlotsBACK\middlewares\asyncHandler.js
 C:\Users\Ork\Desktop\Temini\FreeSlotsBACK\middlewares\auth.js
 C:\Users\Ork\Desktop\Temini\FreeSlotsBACK\middlewares\cache.js
-C:\Users\Ork\Desktop\Temini\FreeSlotsBACK\middlewares\limiter.js
+C:\Users\Ork\Desktop\Temini\FreeSlotsBACK\middlewares\Limiter.js
 C:\Users\Ork\Desktop\Temini\FreeSlotsBACK\middlewares\sanitize.js
 C:\Users\Ork\Desktop\Temini\FreeSlotsBACK\middlewares\validation.js
 C:\Users\Ork\Desktop\Temini\FreeSlotsBACK\middlewares\verifyTelegram.js
