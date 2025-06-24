@@ -9,7 +9,7 @@ const {
   spinLimiter,
   checkinLimiter,
   referralLimiter
-} = require('../middlewares/limiter');
+} = require('../middlewares/Limiter');
 
 const {
   validateAuthUser,
