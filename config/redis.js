@@ -1,29 +1,20 @@
-// Replace the entire content of your Redis file with this:
+// redis.js
 
-const redis = require('redis');
+const { Redis } = require('@upstash/redis');
 
-// This one line of logic defines the correct URL for any environment.
-const redisUrl = process.env.REDIS_URL || 'redis://red-d1di7h95pdvs73ajf170:6379';
-
-const client = redis.createClient({
-  url: redisUrl
-});
-
-client.on('error', (err) => {
-  console.error('❌ Redis error:', err);
-});
-
-// I've added a log here so you can see WHICH Redis instance you connected to.
-client.on('connect', () => {
-  console.log('✅ Redis client connected to:', redisUrl);
-});
+// Automatically pulls UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN from environment
+const redis = Redis.fromEnv();
 
 (async () => {
   try {
-    await client.connect();
+    // Simple health check (can be removed in production)
+    await redis.set('healthcheck', 'ok');
+    const result = await redis.get('healthcheck');
+    console.log('✅ Redis connected via Upstash. Test value:', result);
   } catch (err) {
-    console.error('❌ Failed to connect to Redis:', err);
+    console.error('❌ Redis connection failed:', err.message);
   }
 })();
 
-module.exports = client;
+// Export for use in other parts of your backend
+module.exports = redis;
