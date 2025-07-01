@@ -4,7 +4,7 @@ const RewardLog = require('../models/RewardLog');
 const AuditLog = require('../models/AuditLog');
 const redis = require('../config/redis');
 
-// Decimal helpers
+// Decimal Helpers
 const Decimal = {
   add: (a, b) => mongoose.Types.Decimal128.fromString((parseFloat(a.toString()) + parseFloat(b.toString())).toString()),
   sub: (a, b) => mongoose.Types.Decimal128.fromString((parseFloat(a.toString()) - parseFloat(b.toString())).toString()),
@@ -13,59 +13,51 @@ const Decimal = {
   gte: (a, b) => parseFloat(a.toString()) >= parseFloat(b.toString())
 };
 
-// Config
+// Configs
 const CONFIG = {
-  SPIN: {
-    COST: parseFloat(process.env.SPIN_COST_COINS || 10),
-    COIN_CHANCE: parseFloat(process.env.COIN_REWARD_CHANCE || 0.6),
-    GEM_CHANCE_END: parseFloat(process.env.GEM_REWARD_CHANCE_RANGE_END || 0.8),
-    COIN_REWARDS: [1, 2, 5]
+  FREE_SLOT: {
+    SMALL_REWARDS: [1, 2, 3],
+    BIG_REWARD_CHANCE: 0.05,
+    BIG_REWARDS: [10, 15, 20]
+  },
+  PAID_SPIN: {
+    COST: 10,
+    GEM_CHANCE: 0.2,
+    COIN_REWARDS: [1, 2, 3]
   },
   CHECKIN: {
-    BASE_REWARD: parseFloat(process.env.CHECKIN_BASE_COIN_REWARD || 1),
-    STREAK_BONUSES: {
-      3: parseInt(process.env.STREAK_3_BONUS_SLOTS || 1),
-      5: parseInt(process.env.STREAK_5_BONUS_SLOTS || 2),
-      7: parseInt(process.env.STREAK_7_BONUS_SLOTS || 3),
-      OVER_7: parseInt(process.env.STREAK_OVER_7_BONUS_SLOTS || 1)
+    BASE_REWARD: 1,
+    STREAK_MULTIPLIERS: {
+      3: 2,
+      5: 3,
+      7: 5
     }
   },
   REFERRAL: {
-    NEW_USER: parseFloat(process.env.REFERRAL_BONUS_NEW_USER_COINS || 10),
-    REFERRER: {
-      COINS: parseFloat(process.env.REFERRAL_BONUS_REFERRER_COINS || 5),
-      SLOTS: parseInt(process.env.REFERRAL_BONUS_REFERRER_SLOTS || 1)
-    }
-  },
-  PAGINATION: {
-    REWARD_LOGS: parseInt(process.env.REWARD_LOGS_PER_PAGE || 20)
+    NEW_USER_COINS: 10,
+    REFERRER_COINS: 5
   }
 };
 
-// Cache utilities
+// Redis Cache
 const Cache = {
   getUser: async (id) => {
     try {
       const val = await redis.get(`user:${id}`);
       return val ? JSON.parse(val) : null;
-    } catch (e) {
-      console.error('Redis get error:', e);
+    } catch {
       return null;
     }
   },
   setUser: async (id, user) => {
     try {
       await redis.setEx(`user:${id}`, 300, JSON.stringify(user));
-    } catch (e) {
-      console.error('Redis set error:', e);
-    }
+    } catch {}
   },
   invalidate: async (id) => {
     try {
       await redis.del(`user:${id}`);
-    } catch (e) {
-      console.error('Redis delete error:', e);
-    }
+    } catch {}
   }
 };
 
@@ -94,11 +86,10 @@ const logAction = async (req, action, details) => {
       userAgent: req.headers['user-agent'],
       timestamp: new Date()
     });
-  } catch (e) {
-    console.error('Audit log error:', e);
-  }
+  } catch {}
 };
 
+// Date Helpers
 const DateUtils = {
   isSameDay: (a, b) => a.toDateString() === b.toDateString(),
   isYesterday: (a, now = new Date()) => {
@@ -108,7 +99,7 @@ const DateUtils = {
   }
 };
 
-// ----------- AUTH USER -----------
+// -------- AUTH USER --------
 exports.authUser = async (req, res) => {
   try {
     const { username, referrerId } = req.body;
@@ -122,43 +113,35 @@ exports.authUser = async (req, res) => {
         user = new User({
           telegramId,
           username,
-          coinBalance: Decimal.fromNumber(CONFIG.REFERRAL.NEW_USER),
+          coinBalance: Decimal.fromNumber(CONFIG.REFERRAL.NEW_USER_COINS),
           gems: Decimal.fromNumber(0)
         });
 
         if (referrerId && referrerId !== telegramId) {
           const referrer = await User.findOne({ telegramId: referrerId }).session(session);
           if (referrer) {
-            referrer.coinBalance = Decimal.add(referrer.coinBalance, Decimal.fromNumber(CONFIG.REFERRAL.REFERRER.COINS));
-            referrer.bonusSlots += CONFIG.REFERRAL.REFERRER.SLOTS;
+            referrer.coinBalance = Decimal.add(referrer.coinBalance, Decimal.fromNumber(CONFIG.REFERRAL.REFERRER_COINS));
             referrer.referralCount += 1;
             await referrer.save({ session });
 
             user.referrerId = referrerId;
 
-            await RewardLog.create([
+            await RewardLog.insertMany([
               {
                 telegramId,
                 type: 'referral',
                 rewardType: 'coin',
-                amount: user.coinBalance,
+                amount: Decimal.fromNumber(CONFIG.REFERRAL.NEW_USER_COINS),
                 timestamp: new Date()
               },
               {
                 telegramId: referrerId,
                 type: 'referral',
                 rewardType: 'coin',
-                amount: Decimal.fromNumber(CONFIG.REFERRAL.REFERRER.COINS),
-                timestamp: new Date()
-              },
-              {
-                telegramId: referrerId,
-                type: 'referral',
-                rewardType: 'bonus_slot',
-                amount: CONFIG.REFERRAL.REFERRER.SLOTS,
+                amount: Decimal.fromNumber(CONFIG.REFERRAL.REFERRER_COINS),
                 timestamp: new Date()
               }
-            ], { session });
+            ]);
           }
         }
       } else {
@@ -168,16 +151,12 @@ exports.authUser = async (req, res) => {
       await user.save({ session });
       await Cache.setUser(telegramId, user);
       await logAction(req, isNew ? 'register' : 'login', {});
-
       return {
         user: {
           telegramId: user.telegramId,
           username: user.username,
           coinBalance: Decimal.toNumber(user.coinBalance),
           gems: Decimal.toNumber(user.gems),
-          bonusSlots: user.bonusSlots,
-          streakCount: user.streakCount,
-          lastCheckIn: user.lastCheckIn,
           referrerId: user.referrerId,
           referralCount: user.referralCount
         }
@@ -186,12 +165,58 @@ exports.authUser = async (req, res) => {
 
     res.json({ success: true, ...result });
   } catch (e) {
-    console.error('authUser error:', e);
     res.status(500).json({ success: false, error: 'Auth failed' });
   }
 };
 
-// ----------- SPIN -----------
+// -------- FREE SLOT (HOME PAGE) --------
+exports.freeSlot = async (req, res) => {
+  try {
+    const telegramId = req.telegramData.user.id;
+
+    const result = await withTransaction(async (session) => {
+      const user = await User.findOne({ telegramId }).session(session);
+      if (!user) throw new Error('User not found');
+
+      const roll = Math.random();
+      let reward = 0;
+
+      if (roll < CONFIG.FREE_SLOT.BIG_REWARD_CHANCE) {
+        reward = CONFIG.FREE_SLOT.BIG_REWARDS[Math.floor(Math.random() * CONFIG.FREE_SLOT.BIG_REWARDS.length)];
+      } else {
+        reward = CONFIG.FREE_SLOT.SMALL_REWARDS[Math.floor(Math.random() * CONFIG.FREE_SLOT.SMALL_REWARDS.length)];
+      }
+
+      user.coinBalance = Decimal.add(user.coinBalance, Decimal.fromNumber(reward));
+      await user.save({ session });
+
+      await RewardLog.create({
+        telegramId,
+        type: 'free_slot',
+        rewardType: 'coin',
+        amount: Decimal.fromNumber(reward),
+        timestamp: new Date()
+      }, { session });
+
+      await Cache.setUser(telegramId, user);
+      await logAction(req, 'free_slot', { reward });
+
+      return {
+        reward,
+        balance: {
+          coins: Decimal.toNumber(user.coinBalance),
+          gems: Decimal.toNumber(user.gems)
+        }
+      };
+    });
+
+    res.json({ success: true, ...result });
+  } catch (e) {
+    res.status(400).json({ success: false, error: e.message });
+  }
+};
+
+// -------- PAID SPIN (SPIN PAGE) --------
 exports.spin = async (req, res) => {
   try {
     const telegramId = req.telegramData.user.id;
@@ -200,72 +225,63 @@ exports.spin = async (req, res) => {
       const user = await User.findOne({ telegramId }).session(session);
       if (!user) throw new Error('User not found');
 
-      const coinSlots = Math.floor(Decimal.toNumber(user.coinBalance) / CONFIG.SPIN.COST);
-      const availableSlots = coinSlots + user.bonusSlots;
-
-      if (availableSlots <= 0) throw new Error('No spins left');
-
-      let cost = 0;
-      if (user.bonusSlots > 0) user.bonusSlots -= 1;
-      else {
-        cost = CONFIG.SPIN.COST;
-        user.coinBalance = Decimal.sub(user.coinBalance, Decimal.fromNumber(cost));
+      if (!Decimal.gte(user.coinBalance, CONFIG.PAID_SPIN.COST)) {
+        throw new Error('Not enough coins');
       }
 
-      let reward = { type: 'none', amount: 0 };
-      const roll = Math.random();
+      user.coinBalance = Decimal.sub(user.coinBalance, Decimal.fromNumber(CONFIG.PAID_SPIN.COST));
 
-      if (roll < CONFIG.SPIN.COIN_CHANCE) {
-        const amount = CONFIG.SPIN.COIN_REWARDS[Math.floor(Math.random() * CONFIG.SPIN.COIN_REWARDS.length)];
-        reward = { type: 'coin', amount };
-        user.coinBalance = Decimal.add(user.coinBalance, Decimal.fromNumber(amount));
-      } else if (roll < CONFIG.SPIN.GEM_CHANCE_END) {
-        reward = { type: 'gem', amount: 1 };
+      let rewardType = 'none';
+      let rewardAmount = 0;
+
+      if (Math.random() < CONFIG.PAID_SPIN.GEM_CHANCE) {
+        rewardType = 'gem';
+        rewardAmount = 1;
         user.gems = Decimal.add(user.gems, Decimal.fromNumber(1));
+      } else {
+        rewardType = 'coin';
+        rewardAmount = CONFIG.PAID_SPIN.COIN_REWARDS[Math.floor(Math.random() * CONFIG.PAID_SPIN.COIN_REWARDS.length)];
+        user.coinBalance = Decimal.add(user.coinBalance, Decimal.fromNumber(rewardAmount));
       }
 
-      const logs = [{
-        telegramId,
-        type: 'spin_cost',
-        rewardType: 'coin',
-        amount: Decimal.fromNumber(-cost),
-        timestamp: new Date()
-      }];
+      await user.save({ session });
 
-      if (reward.type !== 'none') {
-        logs.push({
+      await RewardLog.insertMany([
+        {
+          telegramId,
+          type: 'spin_cost',
+          rewardType: 'coin',
+          amount: Decimal.fromNumber(-CONFIG.PAID_SPIN.COST),
+          timestamp: new Date()
+        },
+        {
           telegramId,
           type: 'spin_reward',
-          rewardType: reward.type,
-          amount: Decimal.fromNumber(reward.amount),
+          rewardType,
+          amount: Decimal.fromNumber(rewardAmount),
           timestamp: new Date()
-        });
-      }
+        }
+      ], { session });
 
-      await RewardLog.create(logs, { session });
-      await user.save({ session });
       await Cache.setUser(telegramId, user);
-      await logAction(req, 'spin', { cost, reward });
+      await logAction(req, 'paid_spin', { rewardType, rewardAmount });
 
       return {
-        cost,
-        reward,
+        reward: { type: rewardType, amount: rewardAmount },
         balance: {
           coins: Decimal.toNumber(user.coinBalance),
-          gems: Decimal.toNumber(user.gems),
-          bonusSlots: user.bonusSlots
+          gems: Decimal.toNumber(user.gems)
         }
       };
     });
 
     res.json({ success: true, ...result });
   } catch (e) {
-    console.error('spin error:', e);
     res.status(400).json({ success: false, error: e.message });
   }
 };
 
-// ----------- CHECK-IN -----------
+// -------- DAILY CHECK-IN --------
 exports.checkIn = async (req, res) => {
   try {
     const telegramId = req.telegramData.user.id;
@@ -283,72 +299,57 @@ exports.checkIn = async (req, res) => {
         streak = user.streakCount + 1;
       }
 
-      let bonus = 0;
-      if (streak === 3) bonus = CONFIG.CHECKIN.STREAK_BONUSES[3];
-      else if (streak === 5) bonus = CONFIG.CHECKIN.STREAK_BONUSES[5];
-      else if (streak === 7) bonus = CONFIG.CHECKIN.STREAK_BONUSES[7];
-      else if (streak > 7) bonus = CONFIG.CHECKIN.STREAK_BONUSES.OVER_7;
-
       user.lastCheckIn = now;
       user.streakCount = streak;
-      user.bonusSlots += bonus;
-      user.coinBalance = Decimal.add(user.coinBalance, Decimal.fromNumber(CONFIG.CHECKIN.BASE_REWARD));
+
+      let multiplier = CONFIG.CHECKIN.STREAK_MULTIPLIERS[streak] || 1;
+      const reward = CONFIG.CHECKIN.BASE_REWARD * multiplier;
+
+      user.coinBalance = Decimal.add(user.coinBalance, Decimal.fromNumber(reward));
+
+      await user.save({ session });
 
       await RewardLog.create({
         telegramId,
         type: 'checkin',
-        rewardType: bonus > 0 ? 'coin_and_slot' : 'coin',
-        amount: Decimal.fromNumber(CONFIG.CHECKIN.BASE_REWARD + bonus * 10),
+        rewardType: 'coin',
+        amount: Decimal.fromNumber(reward),
         timestamp: now
       }, { session });
 
-      await user.save({ session });
       await Cache.setUser(telegramId, user);
-      await logAction(req, 'checkin', { streak, bonus });
+      await logAction(req, 'checkin', { streak, reward });
 
       return {
+        reward,
         streak,
-        coinReward: CONFIG.CHECKIN.BASE_REWARD,
-        bonusSlots: bonus,
         balance: {
           coins: Decimal.toNumber(user.coinBalance),
-          bonusSlots: user.bonusSlots
+          gems: Decimal.toNumber(user.gems)
         }
       };
     });
 
     res.json({ success: true, ...result });
   } catch (e) {
-    console.error('checkIn error:', e);
     res.status(400).json({ success: false, error: e.message });
   }
 };
 
-// ----------- GET REWARD LOGS -----------
+// -------- REWARD LOGS --------
 exports.getRewardLogs = async (req, res) => {
   try {
     const telegramId = req.telegramData.user.id;
-    const page = parseInt(req.query.page) || 1;
-    const limit = CONFIG.PAGINATION.REWARD_LOGS;
-    const skip = (page - 1) * limit;
-
-    const [logs, total] = await Promise.all([
-      RewardLog.find({ telegramId }).sort({ timestamp: -1 }).skip(skip).limit(limit).lean(),
-      RewardLog.countDocuments({ telegramId })
-    ]);
+    const logs = await RewardLog.find({ telegramId }).sort({ timestamp: -1 }).limit(50).lean();
 
     res.json({
       success: true,
-      logs: logs.map(log => ({ ...log, amount: Decimal.toNumber(log.amount) })),
-      pagination: {
-        page,
-        total,
-        limit,
-        totalPages: Math.ceil(total / limit)
-      }
+      logs: logs.map(log => ({
+        ...log,
+        amount: Decimal.toNumber(log.amount)
+      }))
     });
   } catch (e) {
-    console.error('getRewardLogs error:', e);
     res.status(500).json({ success: false, error: 'Failed to fetch logs' });
   }
 };

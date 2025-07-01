@@ -18,7 +18,7 @@ const {
   validateReferral
 } = require('../middlewares/validation');
 
-// Auth/Register
+// -------- AUTH/Register --------
 router.post(
   '/auth',
   authLimiter,
@@ -27,7 +27,7 @@ router.post(
   asyncHandler(userController.authUser)
 );
 
-// Spin
+// -------- Paid Spin (costs coins to win coins or gems) --------
 router.post(
   '/spin',
   spinLimiter,
@@ -36,7 +36,15 @@ router.post(
   asyncHandler(userController.spin)
 );
 
-// Daily Check-in
+// -------- Free Slot Spin (777-style coin rewards) --------
+router.post(
+  '/freespin',
+  spinLimiter, // still rate limited to prevent abuse
+  verifyTelegram,
+  asyncHandler(userController.freeSlot)
+);
+
+// -------- Daily Check-in --------
 router.post(
   '/checkin',
   checkinLimiter,
@@ -45,7 +53,7 @@ router.post(
   asyncHandler(userController.checkIn)
 );
 
-// Referral
+// -------- Referral --------
 router.post(
   '/referral',
   referralLimiter,
@@ -54,7 +62,7 @@ router.post(
   asyncHandler(userController.referral)
 );
 
-// Reward Logs (pagination via query params)
+// -------- Reward Logs --------
 router.get(
   '/rewards',
   verifyTelegram,

@@ -12,7 +12,7 @@ const commonLimiterOptions = {
 // Global limiter
 const globalLimiter = rateLimit({
   ...commonLimiterOptions,
-  windowMs: 60 * 1000, // 1 min
+  windowMs: 60 * 1000, // 1 minute
   max: parseInt(process.env.GLOBAL_RATE_LIMIT_MAX_REQUESTS || '100'),
   message: (req, res) => res.status(429).json({
     success: false,
@@ -22,7 +22,7 @@ const globalLimiter = rateLimit({
     req.telegramData?.user?.id?.toString() || req.ip
 });
 
-// Spin limiter
+// Paid spin limiter (Spin Page - uses coins)
 const spinLimiter = rateLimit({
   ...commonLimiterOptions,
   windowMs: 60 * 1000,
@@ -34,7 +34,19 @@ const spinLimiter = rateLimit({
   keyGenerator: (req) => req.telegramData?.user?.id?.toString() || req.ip
 });
 
-// Check-in limiter
+// Free spin limiter (Home Page - 777 slot, unlimited but soft limit to prevent spam abuse)
+const freeSpinLimiter = rateLimit({
+  ...commonLimiterOptions,
+  windowMs: 1000, // 1 second
+  max: parseInt(process.env.FREE_SPIN_RATE_LIMIT_MAX_REQUESTS || '10'), // up to 10 spins per second
+  message: (req, res) => res.status(429).json({
+    success: false,
+    error: 'Too many free spins too quickly. Please slow down.'
+  }),
+  keyGenerator: (req) => req.telegramData?.user?.id?.toString() || req.ip
+});
+
+// Daily check-in limiter
 const checkinLimiter = rateLimit({
   ...commonLimiterOptions,
   windowMs: 24 * 60 * 60 * 1000, // 1 day
@@ -85,6 +97,7 @@ const adminLimiter = rateLimit({
 module.exports = {
   globalLimiter,
   spinLimiter,
+  freeSpinLimiter,
   checkinLimiter,
   referralLimiter,
   authLimiter,

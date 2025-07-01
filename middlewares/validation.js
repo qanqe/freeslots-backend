@@ -52,6 +52,17 @@ exports.validateSpin = validate(Joi.object({
   }),
 }), 'body');
 
+exports.validateFreeSpin = validate(Joi.object({
+  telegramId: Joi.string().required().messages({
+    'string.empty': 'telegramId cannot be empty',
+    'any.required': 'telegramId is required',
+  }),
+  initData: Joi.string().required().messages({
+    'string.empty': 'initData cannot be empty',
+    'any.required': 'initData is required',
+  }),
+}), 'body');
+
 exports.validateCheckIn = validate(Joi.object({
   telegramId: Joi.string().required().messages({
     'string.empty': 'telegramId cannot be empty',
