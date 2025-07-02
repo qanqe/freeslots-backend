@@ -131,17 +131,15 @@ exports.authUser = async (req, res) => {
                 telegramId,
                 type: 'referral',
                 rewardType: 'coin',
-                amount: Decimal.fromNumber(CONFIG.REFERRAL.NEW_USER_COINS),
-                timestamp: new Date()
+                amount: Decimal.fromNumber(CONFIG.REFERRAL.NEW_USER_COINS)
               },
               {
                 telegramId: referrerId,
                 type: 'referral',
                 rewardType: 'coin',
-                amount: Decimal.fromNumber(CONFIG.REFERRAL.REFERRER_COINS),
-                timestamp: new Date()
+                amount: Decimal.fromNumber(CONFIG.REFERRAL.REFERRER_COINS)
               }
-            ]);
+            ], { session });
           }
         }
       } else {
@@ -190,13 +188,14 @@ exports.freeSlot = async (req, res) => {
       user.coinBalance = Decimal.add(user.coinBalance, Decimal.fromNumber(reward));
       await user.save({ session });
 
-      await RewardLog.create({
+      const log = new RewardLog({
         telegramId,
         type: 'free_slot',
         rewardType: 'coin',
-        amount: Decimal.fromNumber(reward),
-        timestamp: new Date()
-      }, { session });
+        amount: Decimal.fromNumber(reward)
+      });
+
+      await log.save({ session });
 
       await Cache.setUser(telegramId, user);
       await logAction(req, 'free_slot', { reward });
@@ -251,15 +250,13 @@ exports.spin = async (req, res) => {
           telegramId,
           type: 'spin_cost',
           rewardType: 'coin',
-          amount: Decimal.fromNumber(-CONFIG.PAID_SPIN.COST),
-          timestamp: new Date()
+          amount: Decimal.fromNumber(-CONFIG.PAID_SPIN.COST)
         },
         {
           telegramId,
           type: 'spin_reward',
           rewardType,
-          amount: Decimal.fromNumber(rewardAmount),
-          timestamp: new Date()
+          amount: Decimal.fromNumber(rewardAmount)
         }
       ], { session });
 
@@ -306,15 +303,13 @@ exports.checkIn = async (req, res) => {
       const reward = CONFIG.CHECKIN.BASE_REWARD * multiplier;
 
       user.coinBalance = Decimal.add(user.coinBalance, Decimal.fromNumber(reward));
-
       await user.save({ session });
 
       const log = new RewardLog({
         telegramId,
         type: 'checkin',
         rewardType: 'coin',
-        amount: Decimal.fromNumber(reward),
-        timestamp: now
+        amount: Decimal.fromNumber(reward)
       });
 
       await log.save({ session });
@@ -337,63 +332,6 @@ exports.checkIn = async (req, res) => {
     res.status(400).json({ success: false, error: e.message });
   }
 };
-// -------- DAILY CHECK-IN --------
-exports.checkIn = async (req, res) => {
-  try {
-    const telegramId = req.telegramData.user.id;
-
-    const result = await withTransaction(async (session) => {
-      const user = await User.findOne({ telegramId }).session(session);
-      if (!user) throw new Error('User not found');
-
-      const now = new Date();
-      const last = user.lastCheckIn ? new Date(user.lastCheckIn) : null;
-      if (last && DateUtils.isSameDay(now, last)) throw new Error('Already checked in');
-
-      let streak = 1;
-      if (last && DateUtils.isYesterday(last, now)) {
-        streak = user.streakCount + 1;
-      }
-
-      user.lastCheckIn = now;
-      user.streakCount = streak;
-
-      let multiplier = CONFIG.CHECKIN.STREAK_MULTIPLIERS[streak] || 1;
-      const reward = CONFIG.CHECKIN.BASE_REWARD * multiplier;
-
-      user.coinBalance = Decimal.add(user.coinBalance, Decimal.fromNumber(reward));
-
-      await user.save({ session });
-
-      const log = new RewardLog({
-        telegramId,
-        type: 'checkin',
-        rewardType: 'coin',
-        amount: Decimal.fromNumber(reward),
-        timestamp: now
-      });
-
-      await log.save({ session });
-
-      await Cache.setUser(telegramId, user);
-      await logAction(req, 'checkin', { streak, reward });
-
-      return {
-        reward,
-        streak,
-        balance: {
-          coins: Decimal.toNumber(user.coinBalance),
-          gems: Decimal.toNumber(user.gems)
-        }
-      };
-    });
-
-    res.json({ success: true, ...result });
-  } catch (e) {
-    res.status(400).json({ success: false, error: e.message });
-  }
-};
-
 
 // -------- REWARD LOGS --------
 exports.getRewardLogs = async (req, res) => {
