@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 const RewardLog = require('../models/RewardLog');
 const AuditLog = require('../models/AuditLog');
+const ReferralReward = require('../models/ReferralReward'); // ✅ required
 const redis = require('../config/redis');
 
 // Decimal Helpers
@@ -23,7 +24,7 @@ const CONFIG = {
   PAID_SPIN: {
     COST: 10,
     GEM_CHANCE: 0.2,
-    COIN_REWARDS: [1, 2, 3]
+    COIN_REWARDS: [50, 102, 203]
   },
   CHECKIN: {
     BASE_REWARD: 1,
@@ -167,7 +168,7 @@ exports.authUser = async (req, res) => {
   }
 };
 
-// -------- FREE SLOT (HOME PAGE) --------
+// -------- FREE SLOT --------
 exports.freeSlot = async (req, res) => {
   try {
     const telegramId = req.telegramData.user.id;
@@ -215,7 +216,7 @@ exports.freeSlot = async (req, res) => {
   }
 };
 
-// -------- PAID SPIN (SPIN PAGE) --------
+// -------- PAID SPIN --------
 exports.spin = async (req, res) => {
   try {
     const telegramId = req.telegramData.user.id;
@@ -278,7 +279,7 @@ exports.spin = async (req, res) => {
   }
 };
 
-// -------- DAILY CHECK-IN --------
+// -------- CHECK-IN --------
 exports.checkIn = async (req, res) => {
   try {
     const telegramId = req.telegramData.user.id;
@@ -348,5 +349,37 @@ exports.getRewardLogs = async (req, res) => {
     });
   } catch (e) {
     res.status(500).json({ success: false, error: 'Failed to fetch logs' });
+  }
+};
+
+// -------- REFERRAL INFO -------- ✅ NEW
+exports.getReferralInfo = async (req, res) => {
+  const { telegramId } = req.query;
+  if (!telegramId) return res.status(400).json({ error: 'Missing telegramId' });
+
+  try {
+    const user = await User.findOne({ telegramId });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const rewards = await ReferralReward.find().sort({ requiredActive: 1 });
+    const claimed = new Set((user.claimedReferralRewards || []).map(r => r.toString()));
+
+    const rewardList = rewards.map((r) => ({
+      id: r._id,
+      type: r.type,
+      value: r.value,
+      requiredActive: r.requiredActive,
+      claimed: claimed.has(r._id.toString())
+    }));
+
+    return res.json({
+      code: user.telegramId,
+      invitedCount: user.referrals.length,
+      activeCount: user.activeReferrals || 0,
+      rewards: rewardList
+    });
+  } catch (err) {
+    console.error('Referral Info Error:', err);
+    return res.status(500).json({ error: 'Server error' });
   }
 };

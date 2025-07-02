@@ -62,6 +62,10 @@ router.post(
   asyncHandler(userController.referral)
 );
 
+router.get(
+  '/referral-info',
+  userController.getReferralInfo);
+
 // -------- Reward Logs --------
 router.get(
   '/rewards',
