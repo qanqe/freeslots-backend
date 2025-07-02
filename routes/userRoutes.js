@@ -38,7 +38,7 @@ router.post(
 
 // -------- Free Slot Spin (777-style coin rewards) --------
 router.post(
-  '/freespin',
+  '/free-slot',
   spinLimiter, // still rate limited to prevent abuse
   verifyTelegram,
   asyncHandler(userController.freeSlot)
