@@ -1,7 +1,6 @@
 const crypto = require('crypto');
 
-// Validate Telegram initData string and return { isValid, user, auth_date }
-exports.checkTelegramAuth = (initData) => {
+const checkTelegramAuth = (initData) => {
   const telegramBotToken = process.env.BOT_TOKEN;
   if (!telegramBotToken) {
     throw new Error('BOT_TOKEN is not set in environment variables.');
@@ -52,4 +51,22 @@ exports.checkTelegramAuth = (initData) => {
   }
 
   return { isValid, user, auth_date };
+};
+
+// ✅ Middleware for Express
+module.exports = (req, res, next) => {
+  const initData = req.headers['x-telegram-auth'];
+
+  if (!initData) {
+    return res.status(401).json({ success: false, error: 'Missing Telegram initData' });
+  }
+
+  const { isValid, user, auth_date } = checkTelegramAuth(initData);
+
+  if (!isValid || !user) {
+    return res.status(403).json({ success: false, error: 'Invalid Telegram authentication' });
+  }
+
+  req.telegramData = { user, auth_date };
+  next();
 };
