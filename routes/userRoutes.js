@@ -3,7 +3,7 @@ const router = express.Router();
 const userController = require('../controllers/userController');
 const verifyTelegram = require('../middlewares/verifyTelegram');
 const asyncHandler = require('../middlewares/asyncHandler');
-const telegramAuth = require('../middlewares/telegramAuth');
+const telegramAuth = require('../util/telegramAuth');
 
 const {
   authLimiter,
