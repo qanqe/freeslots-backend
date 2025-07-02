@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 const RewardLog = require('../models/RewardLog');
 const AuditLog = require('../models/AuditLog');
-const ReferralReward = require('../models/ReferralReward'); // ✅ required
+const ReferralReward = require('../models/ReferralReward');
 const redis = require('../config/redis');
 
 // Decimal Helpers
@@ -14,7 +14,7 @@ const Decimal = {
   gte: (a, b) => parseFloat(a.toString()) >= parseFloat(b.toString())
 };
 
-// Configs
+// Config
 const CONFIG = {
   FREE_SLOT: {
     SMALL_REWARDS: [1, 2, 3],
@@ -40,7 +40,7 @@ const CONFIG = {
   }
 };
 
-// Redis Cache
+// Redis cache helpers
 const Cache = {
   getUser: async (id) => {
     try {
@@ -62,6 +62,7 @@ const Cache = {
   }
 };
 
+// DB session helper
 const withTransaction = async (fn) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -77,6 +78,7 @@ const withTransaction = async (fn) => {
   }
 };
 
+// Audit logger
 const logAction = async (req, action, details) => {
   try {
     await AuditLog.create({
@@ -90,7 +92,7 @@ const logAction = async (req, action, details) => {
   } catch {}
 };
 
-// Date Helpers
+// Date helpers
 const DateUtils = {
   isSameDay: (a, b) => a.toDateString() === b.toDateString(),
   isYesterday: (a, now = new Date()) => {
@@ -145,8 +147,6 @@ exports.authUser = async (req, res) => {
                 amount: Decimal.fromNumber(CONFIG.REFERRAL.REFERRER_COINS)
               }
             ], { session });
-          } else {
-            console.warn('[AUTH] Referrer ID not found in DB:', referrerId);
           }
         }
       } else {
@@ -188,25 +188,19 @@ exports.freeSlot = async (req, res) => {
       if (!user) throw new Error('User not found');
 
       const roll = Math.random();
-      let reward = 0;
-
-      if (roll < CONFIG.FREE_SLOT.BIG_REWARD_CHANCE) {
-        reward = CONFIG.FREE_SLOT.BIG_REWARDS[Math.floor(Math.random() * CONFIG.FREE_SLOT.BIG_REWARDS.length)];
-      } else {
-        reward = CONFIG.FREE_SLOT.SMALL_REWARDS[Math.floor(Math.random() * CONFIG.FREE_SLOT.SMALL_REWARDS.length)];
-      }
+      let reward = roll < CONFIG.FREE_SLOT.BIG_REWARD_CHANCE
+        ? CONFIG.FREE_SLOT.BIG_REWARDS[Math.floor(Math.random() * CONFIG.FREE_SLOT.BIG_REWARDS.length)]
+        : CONFIG.FREE_SLOT.SMALL_REWARDS[Math.floor(Math.random() * CONFIG.FREE_SLOT.SMALL_REWARDS.length)];
 
       user.coinBalance = Decimal.add(user.coinBalance, Decimal.fromNumber(reward));
       await user.save({ session });
 
-      const log = new RewardLog({
+      await RewardLog.create({
         telegramId,
         type: 'free_slot',
         rewardType: 'coin',
         amount: Decimal.fromNumber(reward)
-      });
-
-      await log.save({ session });
+      }, { session });
 
       await Cache.setUser(telegramId, user);
       await logAction(req, 'free_slot', { reward });
@@ -241,9 +235,7 @@ exports.spin = async (req, res) => {
 
       user.coinBalance = Decimal.sub(user.coinBalance, Decimal.fromNumber(CONFIG.PAID_SPIN.COST));
 
-      let rewardType = 'none';
-      let rewardAmount = 0;
-
+      let rewardType, rewardAmount;
       if (Math.random() < CONFIG.PAID_SPIN.GEM_CHANCE) {
         rewardType = 'gem';
         rewardAmount = 1;
@@ -310,20 +302,18 @@ exports.checkIn = async (req, res) => {
       user.lastCheckIn = now;
       user.streakCount = streak;
 
-      let multiplier = CONFIG.CHECKIN.STREAK_MULTIPLIERS[streak] || 1;
+      const multiplier = CONFIG.CHECKIN.STREAK_MULTIPLIERS[streak] || 1;
       const reward = CONFIG.CHECKIN.BASE_REWARD * multiplier;
 
       user.coinBalance = Decimal.add(user.coinBalance, Decimal.fromNumber(reward));
       await user.save({ session });
 
-      const log = new RewardLog({
+      await RewardLog.create({
         telegramId,
         type: 'checkin',
         rewardType: 'coin',
         amount: Decimal.fromNumber(reward)
-      });
-
-      await log.save({ session });
+      }, { session });
 
       await Cache.setUser(telegramId, user);
       await logAction(req, 'checkin', { streak, reward });
