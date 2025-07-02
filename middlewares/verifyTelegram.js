@@ -1,4 +1,4 @@
-const { checkTelegramAuth } = require('../utils/telegramAuth');
+const { checkTelegramAuth } = require('./telegramAuth');
 const User = require('../models/User');
 
 const verifyTelegram = async (req, res, next) => {
