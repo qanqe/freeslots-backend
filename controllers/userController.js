@@ -104,7 +104,11 @@ const DateUtils = {
 exports.authUser = async (req, res) => {
   try {
     const { username, referrerId } = req.body;
-    const telegramId = req.telegramData.user.id;
+    const telegramId = req.telegramData?.user?.id;
+
+    if (!telegramId) {
+      return res.status(400).json({ success: false, error: 'Missing Telegram ID' });
+    }
 
     const result = await withTransaction(async (session) => {
       let user = await User.findOne({ telegramId }).session(session);
@@ -125,7 +129,7 @@ exports.authUser = async (req, res) => {
             referrer.referralCount += 1;
             await referrer.save({ session });
 
-            user.referrerId = referrerId;
+            user.referrerId = referrer.telegramId;
 
             await RewardLog.insertMany([
               {
@@ -135,21 +139,26 @@ exports.authUser = async (req, res) => {
                 amount: Decimal.fromNumber(CONFIG.REFERRAL.NEW_USER_COINS)
               },
               {
-                telegramId: referrerId,
+                telegramId: referrer.telegramId,
                 type: 'referral',
                 rewardType: 'coin',
                 amount: Decimal.fromNumber(CONFIG.REFERRAL.REFERRER_COINS)
               }
             ], { session });
+          } else {
+            console.warn('[AUTH] Referrer ID not found in DB:', referrerId);
           }
         }
       } else {
-        if (user.username !== username) user.username = username;
+        if (user.username !== username) {
+          user.username = username;
+        }
       }
 
       await user.save({ session });
       await Cache.setUser(telegramId, user);
       await logAction(req, isNew ? 'register' : 'login', {});
+
       return {
         user: {
           telegramId: user.telegramId,
@@ -164,6 +173,7 @@ exports.authUser = async (req, res) => {
 
     res.json({ success: true, ...result });
   } catch (e) {
+    console.error('[authUser] Error:', e);
     res.status(500).json({ success: false, error: 'Auth failed' });
   }
 };
