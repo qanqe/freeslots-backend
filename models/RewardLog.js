@@ -15,7 +15,7 @@ const rewardLogSchema = new mongoose.Schema({
       'checkin',
       'referral',
       'admin_adjustment',
-      'free-slot'
+      'free_slot'
     ]
   },
   rewardType: {
