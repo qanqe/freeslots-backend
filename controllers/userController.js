@@ -352,34 +352,31 @@ exports.getRewardLogs = async (req, res) => {
   }
 };
 
-// -------- REFERRAL INFO -------- ✅ NEW
-exports.getReferralInfo = async (req, res) => {
-  const { telegramId } = req.query;
-  if (!telegramId) return res.status(400).json({ error: 'Missing telegramId' });
-
+// -------- REFERRAL INFO --------
+exports.referralInfo = async (req, res) => {
   try {
+    const telegramId = req.telegramData.user.id;
     const user = await User.findOne({ telegramId });
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
-    const rewards = await ReferralReward.find().sort({ requiredActive: 1 });
+    const rewards = await ReferralReward.find().sort({ requiredActive: 1 }).lean();
     const claimed = new Set((user.claimedReferralRewards || []).map(r => r.toString()));
 
-    const rewardList = rewards.map((r) => ({
+    const rewardsWithClaimed = rewards.map(r => ({
       id: r._id,
       type: r.type,
-      value: r.value,
+      value: parseFloat(r.value.toString()),
       requiredActive: r.requiredActive,
       claimed: claimed.has(r._id.toString())
     }));
 
-    return res.json({
-      code: user.telegramId,
-      invitedCount: user.referrals.length,
-      activeCount: user.activeReferrals || 0,
-      rewards: rewardList
+    res.json({
+      success: true,
+      invitedCount: user.referralCount || 0,
+      rewards: rewardsWithClaimed
     });
-  } catch (err) {
-    console.error('Referral Info Error:', err);
-    return res.status(500).json({ error: 'Server error' });
+  } catch (e) {
+    console.error('[referralInfo] Error:', e);
+    res.status(500).json({ success: false, error: 'Server error' });
   }
 };

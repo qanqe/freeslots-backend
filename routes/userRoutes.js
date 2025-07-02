@@ -62,9 +62,7 @@ router.post(
   asyncHandler(userController.referral)
 );
 
-router.get(
-  '/referral-info',
-  userController.getReferralInfo);
+router.get('/referral-info', telegramAuth, userController.referralInfo);
 
 // -------- Reward Logs --------
 router.get(
