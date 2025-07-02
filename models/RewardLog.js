@@ -14,7 +14,8 @@ const rewardLogSchema = new mongoose.Schema({
       'spin_reward',
       'checkin',
       'referral',
-      'admin_adjustment'
+      'admin_adjustment',
+      'free-slot'
     ]
   },
   rewardType: {
