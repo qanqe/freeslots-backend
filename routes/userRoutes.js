@@ -63,7 +63,12 @@ router.post(
   asyncHandler(userController.referral)
 );
 
-router.get('/referral-info', telegramAuth, userController.referralInfo);
+// -------- Referral Info --------
+router.get(
+  '/referral-info',
+  telegramAuth,
+  asyncHandler(userController.referralInfo)
+);
 
 // -------- Reward Logs --------
 router.get(
@@ -72,4 +77,5 @@ router.get(
   asyncHandler(userController.getRewardLogs)
 );
 
+// ✅ CORRECT EXPORT
 module.exports = router;
