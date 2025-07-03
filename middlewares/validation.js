@@ -1,3 +1,4 @@
+// middlewares/validation.js
 const Joi = require('joi');
 
 // Reusable validation wrapper
@@ -26,11 +27,8 @@ exports.validateAuthUser = validate(Joi.object({
     'string.empty': 'telegramId cannot be empty',
     'any.required': 'telegramId is required',
   }),
-  username: Joi.string().min(3).max(50).required().messages({
-    'string.empty': 'username cannot be empty',
-    'string.min': 'username should be at least {#limit} characters',
-    'string.max': 'username should be no more than {#limit} characters',
-    'any.required': 'username is required',
+  username: Joi.string().allow('', null).optional().messages({
+    'string.base': 'username must be a string',
   }),
   referrerId: Joi.string().optional().allow(null, '').messages({
     'string.empty': 'referrerId cannot be empty if provided',
