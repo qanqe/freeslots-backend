@@ -18,36 +18,68 @@ if (!MONGODB_URI) {
   process.exit(1);
 }
 
-app.use(helmet.contentSecurityPolicy({
-  directives: {
-    defaultSrc: ["'self'"],
-    scriptSrc: ["'self'", "'unsafe-inline'"],
-    styleSrc: ["'self'", "'unsafe-inline'"],
-    imgSrc: ["'self'", "data:"]
-  }
-}));
+// Helmet security headers including CSP
+app.use(
+  helmet.contentSecurityPolicy({
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:"],
+    },
+  })
+);
 
-app.use(cors({
-  origin: allowedOrigins,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Telegram-Auth', 'x-telegram-init-data'],
-  optionsSuccessStatus: 204,
-}));
-
-app.use(globalLimiter);
+// JSON body parsing middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-mongoose.connect(MONGODB_URI)
+// CORS middleware
+app.use(
+  cors({
+    origin: allowedOrigins,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    credentials: true,
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Telegram-Auth',
+      'x-telegram-init-data',
+    ],
+    optionsSuccessStatus: 204,
+  })
+);
+
+// Explicit OPTIONS preflight route (Render requires this sometimes)
+app.options('*', cors({
+  origin: allowedOrigins,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true,
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Telegram-Auth',
+    'x-telegram-init-data',
+  ],
+  optionsSuccessStatus: 204,
+}));
+
+// Rate limiting middleware
+app.use(globalLimiter);
+
+// MongoDB connection
+mongoose
+  .connect(MONGODB_URI)
   .then(() => console.log('✅ MongoDB connected successfully'))
-  .catch(err => {
+  .catch((err) => {
     console.error('❌ MongoDB connection error:', err);
     process.exit(1);
   });
 
+// Main API routes
 app.use('/api', mainApiRoutes);
 
+// 404 Not Found handler
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -56,6 +88,7 @@ app.use((req, res) => {
   });
 });
 
+// Global error handler
 app.use((err, req, res, next) => {
   console.error('🔥 SERVER_ERROR:', err.stack || err);
   res.status(500).json({
@@ -65,11 +98,13 @@ app.use((err, req, res, next) => {
   });
 });
 
+// Start server
 const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 
+// Graceful shutdown
 const gracefulShutdown = () => {
   console.log('\n🛑 Received termination signal. Shutting down gracefully...');
 
