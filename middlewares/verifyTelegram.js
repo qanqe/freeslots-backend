@@ -1,5 +1,4 @@
 const { checkTelegramAuth } = require('./telegramAuth');
-const User = require('../models/User');
 
 const verifyTelegram = async (req, res, next) => {
   const initData = req.body.initData || req.headers['x-telegram-init-data'];
@@ -41,20 +40,6 @@ const verifyTelegram = async (req, res, next) => {
       auth_date
     };
 
-    // Ensure user exists in DB so subsequent logic can depend on it
-    let user = await User.findOne({ telegramId: req.telegramData.user.id });
-    if (!user) {
-      const fallbackUsername = telegramUser.username || `${telegramUser.first_name} ${telegramUser.last_name || ''}`.trim();
-      user = new User({
-        telegramId: req.telegramData.user.id,
-        username: fallbackUsername,
-        coinBalance: 0,
-        gems: 0
-      });
-      await user.save();
-    }
-
-    req.user = user;
     next();
 
   } catch (err) {

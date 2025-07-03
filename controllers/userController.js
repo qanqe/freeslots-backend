@@ -1,3 +1,4 @@
+// userController.js
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const RewardLog = require('../models/RewardLog');
@@ -14,7 +15,7 @@ const Decimal = {
   gte: (a, b) => parseFloat(a.toString()) >= parseFloat(b.toString())
 };
 
-// Config
+// Configs
 const CONFIG = {
   FREE_SLOT: {
     SMALL_REWARDS: [1, 2, 3],
@@ -28,11 +29,7 @@ const CONFIG = {
   },
   CHECKIN: {
     BASE_REWARD: 1,
-    STREAK_MULTIPLIERS: {
-      3: 2,
-      5: 3,
-      7: 5
-    }
+    STREAK_MULTIPLIERS: { 3: 2, 5: 3, 7: 5 }
   },
   REFERRAL: {
     NEW_USER_COINS: 10,
@@ -40,7 +37,7 @@ const CONFIG = {
   }
 };
 
-// Redis cache helpers
+// Redis Cache
 const Cache = {
   getUser: async (id) => {
     try {
@@ -62,7 +59,7 @@ const Cache = {
   }
 };
 
-// DB session helper
+// Transactions
 const withTransaction = async (fn) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -78,7 +75,6 @@ const withTransaction = async (fn) => {
   }
 };
 
-// Audit logger
 const logAction = async (req, action, details) => {
   try {
     await AuditLog.create({
@@ -92,7 +88,7 @@ const logAction = async (req, action, details) => {
   } catch {}
 };
 
-// Date helpers
+// Date Helpers
 const DateUtils = {
   isSameDay: (a, b) => a.toDateString() === b.toDateString(),
   isYesterday: (a, now = new Date()) => {
@@ -188,19 +184,19 @@ exports.freeSlot = async (req, res) => {
       if (!user) throw new Error('User not found');
 
       const roll = Math.random();
-      let reward = roll < CONFIG.FREE_SLOT.BIG_REWARD_CHANCE
+      const reward = roll < CONFIG.FREE_SLOT.BIG_REWARD_CHANCE
         ? CONFIG.FREE_SLOT.BIG_REWARDS[Math.floor(Math.random() * CONFIG.FREE_SLOT.BIG_REWARDS.length)]
         : CONFIG.FREE_SLOT.SMALL_REWARDS[Math.floor(Math.random() * CONFIG.FREE_SLOT.SMALL_REWARDS.length)];
 
       user.coinBalance = Decimal.add(user.coinBalance, Decimal.fromNumber(reward));
       await user.save({ session });
 
-      await RewardLog.create({
+      await RewardLog.create([{
         telegramId,
         type: 'free_slot',
         rewardType: 'coin',
         amount: Decimal.fromNumber(reward)
-      }, { session });
+      }], { session });
 
       await Cache.setUser(telegramId, user);
       await logAction(req, 'free_slot', { reward });
@@ -235,7 +231,9 @@ exports.spin = async (req, res) => {
 
       user.coinBalance = Decimal.sub(user.coinBalance, Decimal.fromNumber(CONFIG.PAID_SPIN.COST));
 
-      let rewardType, rewardAmount;
+      let rewardType = 'none';
+      let rewardAmount = 0;
+
       if (Math.random() < CONFIG.PAID_SPIN.GEM_CHANCE) {
         rewardType = 'gem';
         rewardAmount = 1;
@@ -308,12 +306,12 @@ exports.checkIn = async (req, res) => {
       user.coinBalance = Decimal.add(user.coinBalance, Decimal.fromNumber(reward));
       await user.save({ session });
 
-      await RewardLog.create({
+      await RewardLog.create([{
         telegramId,
         type: 'checkin',
         rewardType: 'coin',
         amount: Decimal.fromNumber(reward)
-      }, { session });
+      }], { session });
 
       await Cache.setUser(telegramId, user);
       await logAction(req, 'checkin', { streak, reward });
