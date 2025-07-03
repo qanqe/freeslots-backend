@@ -58,4 +58,24 @@ const checkTelegramAuth = (initData) => {
   return { isValid, user, auth_date };
 };
 
-module.exports = { checkTelegramAuth };
+/**
+ * Express middleware for Telegram authentication
+ */
+const telegramAuthMiddleware = (req, res, next) => {
+  const initData = req.headers['x-telegram-auth'];
+  if (!initData) {
+    return res.status(401).json({ success: false, error: 'Missing Telegram initData' });
+  }
+
+  const { isValid, user, auth_date } = checkTelegramAuth(initData);
+
+  if (!isValid || !user) {
+    return res.status(403).json({ success: false, error: 'Invalid Telegram authentication' });
+  }
+
+  req.telegramData = { user, auth_date };
+  next();
+};
+
+module.exports = telegramAuthMiddleware;
+module.exports.checkTelegramAuth = checkTelegramAuth;
