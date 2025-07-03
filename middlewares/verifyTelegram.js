@@ -1,7 +1,8 @@
+// middlewares/verifyTelegram.js
 const { checkTelegramAuth } = require('./telegramAuth');
 
 const verifyTelegram = async (req, res, next) => {
-  const initData = req.body.initData || req.headers['x-telegram-init-data'];
+  const initData = req.body.initData || req.headers['x-telegram-auth'] || req.headers['x-telegram-init-data'];
 
   if (!initData) {
     return res.status(401).json({

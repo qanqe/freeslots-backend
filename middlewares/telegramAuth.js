@@ -1,5 +1,10 @@
+// middlewares/telegramAuth.js
 const crypto = require('crypto');
 
+/**
+ * Verifies Telegram WebApp initData using HMAC SHA256.
+ * Returns an object with { isValid, user, auth_date }
+ */
 const checkTelegramAuth = (initData) => {
   const telegramBotToken = process.env.BOT_TOKEN;
   if (!telegramBotToken) {
@@ -53,20 +58,4 @@ const checkTelegramAuth = (initData) => {
   return { isValid, user, auth_date };
 };
 
-// ✅ Middleware for Express
-module.exports = (req, res, next) => {
-  const initData = req.headers['x-telegram-auth'];
-
-  if (!initData) {
-    return res.status(401).json({ success: false, error: 'Missing Telegram initData' });
-  }
-
-  const { isValid, user, auth_date } = checkTelegramAuth(initData);
-
-  if (!isValid || !user) {
-    return res.status(403).json({ success: false, error: 'Invalid Telegram authentication' });
-  }
-
-  req.telegramData = { user, auth_date };
-  next();
-};
+module.exports = { checkTelegramAuth };
