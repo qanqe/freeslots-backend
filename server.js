@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
+const allowedOrigins = ['https://temini.vercel.app'];
 
 const mainApiRoutes = require('./routes/index');
 const globalLimiter = require('./middlewares/Limiter').globalLimiter;
@@ -27,9 +28,10 @@ app.use(helmet.contentSecurityPolicy({
 }));
 
 app.use(cors({
-  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*',
-  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+  origin: allowedOrigins,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Telegram-Auth', 'x-telegram-init-data'],
   optionsSuccessStatus: 204,
 }));
 
