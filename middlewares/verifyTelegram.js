@@ -1,4 +1,4 @@
-const { checkTelegramAuth } = require('../util/checkTelegramAuth'); // Use correct path
+const { checkTelegramAuth } = require('../utils/checkTelegramAuth'); // Use correct path
 
 const verifyTelegram = async (req, res, next) => {
   const initData =
