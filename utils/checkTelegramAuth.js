@@ -10,18 +10,24 @@ function checkTelegramAuth(initData) {
 
   const params = new URLSearchParams(initData);
   const hash = params.get('hash');
+  if (!hash) {
+    return { isValid: false, user: null, auth_date: 0 };
+  }
+
   params.delete('hash');
 
-  const dataCheckString = Array.from(params.entries())
+  // Build data check string
+  const dataCheckString = [...params.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, val]) => `${key}=${val}`)
     .join('\n');
 
-  const secret = crypto.createHmac('sha256')
+  // Derive the secret key and compute the hash
+  const secretKey = crypto.createHmac('sha256', 'WebAppData')
     .update(telegramBotToken)
     .digest();
 
-  const calculatedHash = crypto.createHmac('sha256', secret)
+  const calculatedHash = crypto.createHmac('sha256', secretKey)
     .update(dataCheckString)
     .digest('hex');
 
@@ -38,7 +44,7 @@ function checkTelegramAuth(initData) {
       auth_date = parseInt(authDateStr, 10);
     }
   } catch (err) {
-    console.error('Telegram initData parse error:', err);
+    console.error('[checkTelegramAuth] Failed to parse user or auth_date:', err);
     return { isValid: false, user: null, auth_date: 0 };
   }
 
@@ -49,8 +55,16 @@ function checkTelegramAuth(initData) {
       Buffer.from(hash, 'hex')
     );
   } catch (err) {
+    console.error('[checkTelegramAuth] timingSafeEqual error:', err);
     isValid = false;
   }
+
+  // Optional debug logs:
+console.log('--- Telegram Auth Debug ---');
+console.log('initData:', initData);
+console.log('dataCheckString:', dataCheckString);
+console.log('calculatedHash:', calculatedHash);
+console.log('receivedHash:', hash);
 
   return { isValid, user, auth_date };
 }
