@@ -1,5 +1,4 @@
-// middlewares/verifyTelegram.js
-const { checkTelegramAuth } = require('./telegramAuth');
+const { checkTelegramAuth } = require('../util/checkTelegramAuth'); // Use correct path
 
 const verifyTelegram = async (req, res, next) => {
   const initData =
@@ -8,6 +7,7 @@ const verifyTelegram = async (req, res, next) => {
     req.headers['x-telegram-init-data'];
 
   if (!initData) {
+    console.log('[verifyTelegram] ❌ Missing initData');
     return res.status(401).json({
       success: false,
       error: 'Unauthorized: Telegram initData is missing.'
@@ -15,9 +15,13 @@ const verifyTelegram = async (req, res, next) => {
   }
 
   try {
-    const { isValid, user: telegramUser, auth_date } = checkTelegramAuth(initData);
+    const result = checkTelegramAuth(initData);
+    const { isValid, user: telegramUser, auth_date } = result;
+
+    console.log('[verifyTelegram] ✅ Auth Check Result:', result);
 
     if (!isValid) {
+      console.log('[verifyTelegram] ❌ Invalid Signature');
       return res.status(401).json({
         success: false,
         error: 'Unauthorized: Invalid Telegram initData signature.'
@@ -26,7 +30,9 @@ const verifyTelegram = async (req, res, next) => {
 
     const now = Math.floor(Date.now() / 1000);
     const maxAge = parseInt(process.env.TELEGRAM_AUTH_MAX_AGE_SECONDS || '3600', 10);
+
     if (now - auth_date > maxAge) {
+      console.log(`[verifyTelegram] ❌ Expired: now=${now}, auth_date=${auth_date}`);
       return res.status(401).json({
         success: false,
         error: 'Unauthorized: Telegram initData has expired.'
@@ -47,7 +53,7 @@ const verifyTelegram = async (req, res, next) => {
     next();
 
   } catch (err) {
-    console.error('verifyTelegram error:', err);
+    console.error('[verifyTelegram] ❌ Exception:', err);
     const isAuthError = err.message.includes('Invalid') || err.message.includes('HMAC');
     res.status(isAuthError ? 401 : 500).json({
       success: false,
