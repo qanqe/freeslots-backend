@@ -17,7 +17,7 @@ function checkTelegramAuth(initData) {
     .map(([key, val]) => `${key}=${val}`)
     .join('\n');
 
-  const secret = crypto.createHmac('sha256', 'WebAppData')
+  const secret = crypto.createHmac('sha256')
     .update(telegramBotToken)
     .digest();
 
