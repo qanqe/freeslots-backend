@@ -48,7 +48,6 @@ router.post(
 // -------- Daily Check-in --------
 router.post(
   '/checkin',
-  checkinLimiter,
   verifyTelegram,
   validateCheckIn,
   asyncHandler(userController.checkIn)
