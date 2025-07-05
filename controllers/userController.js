@@ -246,24 +246,45 @@ exports.spin = async (req, res) => {
         throw new Error('Not enough coins');
       }
 
+      // Deduct cost first
       user.coinBalance = Decimal.sub(user.coinBalance, Decimal.fromNumber(CONFIG.PAID_SPIN.COST));
+
+      const roll = Math.random();
 
       let rewardType = 'none';
       let rewardAmount = 0;
 
-      if (Math.random() < CONFIG.PAID_SPIN.GEM_CHANCE) {
-        rewardType = 'gem';
-        rewardAmount = 1;
-        user.gems = Decimal.add(user.gems, Decimal.fromNumber(1));
-      } else {
+      if (roll < 0.4) {
+        // 40% Try again: no reward
+        rewardType = 'none';
+        rewardAmount = 0;
+      } else if (roll < 0.7) {
+        // 30% fixed 50 coins reward
         rewardType = 'coin';
-        rewardAmount =
-          CONFIG.PAID_SPIN.COIN_REWARDS[Math.floor(Math.random() * CONFIG.PAID_SPIN.COIN_REWARDS.length)];
+        rewardAmount = 50;
         user.coinBalance = Decimal.add(user.coinBalance, Decimal.fromNumber(rewardAmount));
+      } else {
+        // Last 30% split equally into gem or other coin rewards
+        const subRoll = (roll - 0.7) / 0.3; // map 0.7-1 to 0-1
+        if (subRoll < 0.5) {
+          // 15% gem reward
+          rewardType = 'gem';
+          rewardAmount = 1;
+          user.gems = Decimal.add(user.gems, Decimal.fromNumber(1));
+        } else {
+          // 15% other coin rewards
+          rewardType = 'coin';
+          rewardAmount =
+            CONFIG.PAID_SPIN.COIN_REWARDS[
+              Math.floor(Math.random() * CONFIG.PAID_SPIN.COIN_REWARDS.length)
+            ];
+          user.coinBalance = Decimal.add(user.coinBalance, Decimal.fromNumber(rewardAmount));
+        }
       }
 
       await user.save({ session });
 
+      // Log spin cost and reward only if any
       await RewardLog.insertMany(
         [
           {
@@ -272,12 +293,16 @@ exports.spin = async (req, res) => {
             rewardType: 'coin',
             amount: Decimal.fromNumber(-CONFIG.PAID_SPIN.COST),
           },
-          {
-            telegramId,
-            type: 'spin_reward',
-            rewardType,
-            amount: Decimal.fromNumber(rewardAmount),
-          },
+          ...(rewardType !== 'none'
+            ? [
+                {
+                  telegramId,
+                  type: 'spin_reward',
+                  rewardType,
+                  amount: Decimal.fromNumber(rewardAmount),
+                },
+              ]
+            : []),
         ],
         { session }
       );
@@ -286,7 +311,7 @@ exports.spin = async (req, res) => {
       await logAction(req, 'paid_spin', { rewardType, rewardAmount });
 
       return {
-        reward: { type: rewardType, amount: rewardAmount },
+        reward: rewardType === 'none' ? null : { type: rewardType, amount: rewardAmount },
         balance: {
           coins: Decimal.toNumber(user.coinBalance),
           gems: Decimal.toNumber(user.gems),
@@ -299,6 +324,7 @@ exports.spin = async (req, res) => {
     res.status(400).json({ success: false, error: e.message });
   }
 };
+
 
 // -------- CHECK-IN --------
 exports.checkIn = async (req, res) => {
